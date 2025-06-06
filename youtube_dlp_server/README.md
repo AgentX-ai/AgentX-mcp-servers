@@ -1,5 +1,8 @@
 # YouTube DLP MCP Server
 
+[![Website](https://img.shields.io/badge/Website-🌐-purple)](https://mcp.agentx.so/mcp/youtube-dlp)
+[![Discord](https://img.shields.io/badge/Discord-Join-7289DA?logo=discord&logoColor=white)](https://discord.gg/dJkAbUq9rU)
+
 🎬 **A Model Context Protocol (MCP) server that lets your AI interact with YouTube videos** - extract video information, subtitles, and top comments without downloading.
 
 ## ✨ Features
@@ -16,7 +19,7 @@
 ### Install with uvx (Recommended)
 
 ```bash
-uvx run youtube-dlp-server
+uvx youtube-dlp-server
 ```
 
 ### Install with pip

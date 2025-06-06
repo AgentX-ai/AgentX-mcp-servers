@@ -27,7 +27,7 @@
 **Extract video information, subtitles, and comments from YouTube**
 
 ```bash
-uvx run youtube-dlp-server
+uvx youtube-dlp-server
 ```
 
 **Features:**
