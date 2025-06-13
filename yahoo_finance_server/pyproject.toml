@@ -1,11 +1,11 @@
 [project]
-name = "youtube-dlp-server"
+name = "yahoo-finance-server"
 version = "0.1.0"
-description = "Let your AI to view Youtube video, get info, subtitle and more. Even downloading."
+description = "Let your AI get comprehensive stock market data from Yahoo Finance including quotes, news, financials, and more."
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
-keywords = ["youtube", "dlp", "mcp", "ai", "subtitles", "comments", "video"]
+keywords = ["yahoo-finance", "stocks", "market-data", "mcp", "ai", "trading", "finance"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -14,35 +14,35 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Internet :: WWW/HTTP",
-    "Topic :: Multimedia :: Video",
+    "Topic :: Office/Business :: Financial",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
     "mcp>=1.9.3",
-    "yt-dlp==2025.5.22",
-    "python-ffmpeg==2.0.12",
+    "yfinance==0.2.62",
     "requests>=2.31.0",
+    "pandas>=2.0.0",
 ]
 
 [[project.authors]]
 name = "Robin"
-email = "robin.xw@hotmail.com"
+email = "robin@agentx.so"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/youtube-dlp-server"
-Repository = "https://github.com/yourusername/youtube-dlp-server"
-Documentation = "https://github.com/yourusername/youtube-dlp-server#readme"
-Issues = "https://github.com/yourusername/youtube-dlp-server/issues"
+Homepage = "https://github.com/AgentX-ai/AgentX-mcp-servers"
+Repository = "https://github.com/AgentX-ai/AgentX-mcp-servers"
+Documentation = "https://github.com/AgentX-ai/AgentX-mcp-servers#readme"
+Issues = "https://github.com/AgentX-ai/AgentX-mcp-servers/issues"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-youtube-dlp-server = "youtube_dlp_server:main"
+yahoo-finance-server = "yahoo_finance_server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/youtube_dlp_server"]
+packages = ["src/yahoo_finance_server"]
 
 [tool.uvx]
 namespace = "agentx" 

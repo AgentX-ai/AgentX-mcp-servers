@@ -1,0 +1,996 @@
+import yfinance as yf
+from yfinance.const import SECTOR_INDUSTY_MAPPING
+import os
+import asyncio
+import logging
+from typing import Dict, Any, Optional, List, Union, Annotated, Literal
+from pydantic import Field
+import json
+from datetime import datetime, timedelta
+import requests
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+
+def _get_proxy_config() -> Optional[Dict[str, str]]:
+    """
+    Get proxy configuration from environment variable.
+
+    Returns:
+        Proxy configuration dictionary if set, None otherwise
+    """
+    proxy_url = os.getenv("PROXY_URL", "").strip()
+    if proxy_url:
+        logger.info(f"Using proxy: {proxy_url}")
+        return {"http": proxy_url, "https": proxy_url}
+    return None
+
+
+def _setup_yfinance_session():
+    """
+    Setup yfinance session with proxy if configured and better headers to avoid detection.
+    """
+    # Create a session with better headers to avoid bot detection
+    session = requests.Session()
+
+    # Add realistic headers
+    session.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Cache-Control": "max-age=0",
+        }
+    )
+
+    # Apply proxy configuration if available
+    proxy_config = _get_proxy_config()
+    if proxy_config:
+        session.proxies.update(proxy_config)
+        logger.info("Proxy configuration applied to session")
+
+    # Apply the session to yfinance
+    try:
+        # Override yfinance's session
+        yf.utils.get_json = lambda url, proxy=None, **kwargs: session.get(
+            url, **kwargs
+        ).json()
+        logger.info("Enhanced session applied to yfinance")
+    except Exception as e:
+        logger.warning(f"Could not apply enhanced session to yfinance: {e}")
+
+
+# Initialize session with proxy support
+_setup_yfinance_session()
+
+
+async def get_ticker_info(symbol: str) -> str:
+    """
+    Get comprehensive ticker information using fast_info for reliability.
+
+    Args:
+        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL')
+
+    Returns:
+        JSON string containing comprehensive ticker information
+    """
+    try:
+
+        def _get_info():
+            ticker = yf.Ticker(symbol)
+            try:
+                fast_info = ticker.info
+                logger.info(f"Got fast_info for {symbol}: {fast_info}")
+                for key, value in fast_info.items():
+                    if not isinstance(key, str):
+                        continue
+
+                    if key.lower().endswith(
+                        ("date", "start", "end", "timestamp", "time", "quarter")
+                    ):
+                        try:
+                            fast_info[key] = datetime.fromtimestamp(value).strftime(
+                                "%Y-%m-%d %H:%M:%S"
+                            )
+                        except Exception as e:
+                            logger.error(f"Unable to convert time {key}: {value}: {e}")
+                            continue
+                return json.dumps(fast_info)
+            except Exception as e:
+                logger.error(f"Failed to get fast_info for {symbol}: {e}")
+                return json.dumps(
+                    {"symbol": symbol, "error": "Unable to fetch ticker fast_info"}
+                )
+
+        # Run in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        info = await loop.run_in_executor(None, _get_info)
+        return info
+
+    except Exception as e:
+        logger.error(f"Error getting ticker info for {symbol}: {e}")
+        return json.dumps(
+            {"symbol": symbol, "error": f"Failed to get ticker information: {str(e)}"}
+        )
+
+
+async def get_ticker_news(symbol: str, count: int = 10) -> Dict[str, Any]:
+    """
+    Fetch recent news articles related to a specific stock symbol.
+
+    Args:
+        symbol: Stock symbol
+        count: Number of news articles to fetch (default: 10)
+
+    Returns:
+        Dictionary containing news articles with title, content, and source details
+    """
+    try:
+
+        def _get_news():
+            ticker = yf.Ticker(symbol)
+
+            # Try multiple methods to get news
+            news = []
+
+            # Method 1: Try ticker.news property
+            try:
+                news = ticker.news
+                logger.info(
+                    f"Method 1 - ticker.news returned {len(news) if news else 0} articles"
+                )
+
+                if not news:
+                    news = []
+            except Exception as e:
+                logger.warning(f"Method 1 failed for {symbol}: {e}")
+                news = []
+
+            # Method 2: Try direct API call if Method 1 fails
+            if not news:
+                try:
+                    # Use Yahoo Finance news API directly
+                    news_url = f"https://query2.finance.yahoo.com/v1/finance/search"
+                    params = {
+                        "q": symbol,
+                        "quotesCount": 1,
+                        "newsCount": count,
+                        "enableFuzzyQuery": False,
+                        "quotesQueryId": "tss_match_phrase_query",
+                        "multiQuoteQueryId": "multi_quote_single_token_query",
+                        "enableCb": True,
+                        "enableNavLinks": True,
+                        "enableEnhancedTrivialQuery": True,
+                    }
+
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    }
+
+                    proxy_config = _get_proxy_config()
+                    response = requests.get(
+                        news_url,
+                        params=params,
+                        headers=headers,
+                        proxies=proxy_config,
+                        timeout=10,
+                    )
+                    response.raise_for_status()
+
+                    data = response.json()
+                    if "news" in data:
+                        news = data["news"]
+                        logger.info(
+                            f"Method 2 - direct API returned {len(news)} articles"
+                        )
+                    else:
+                        logger.info("Method 2 - no news found in API response")
+
+                except Exception as e:
+                    logger.warning(f"Method 2 failed for {symbol}: {e}")
+
+            # Process the news articles
+            processed_news = []
+            if news:
+                # Limit to requested count
+                news = news[:count] if len(news) > count else news
+
+                for article in news:
+                    try:
+                        # Handle both old and new yfinance news structure
+                        content = article.get(
+                            "content", article
+                        )  # New structure has content wrapper
+
+                        # Extract title
+                        title = content.get("title", article.get("title", ""))
+
+                        # Extract link
+                        link = ""
+                        if "canonicalUrl" in content:
+                            link = content["canonicalUrl"].get("url", "")
+                        elif "clickThroughUrl" in content:
+                            link = content["clickThroughUrl"].get("url", "")
+                        else:
+                            link = article.get("link", "")
+
+                        # Extract publisher
+                        publisher = ""
+                        if "provider" in content:
+                            publisher = content["provider"].get("displayName", "")
+                        else:
+                            publisher = article.get("publisher", "")
+
+                        # Extract publish time
+                        published = ""
+                        if "pubDate" in content:
+                            # pubDate is in ISO format
+                            published = content["pubDate"]
+                        elif "displayTime" in content:
+                            published = content["displayTime"]
+                        elif article.get("providerPublishTime"):
+                            published = datetime.fromtimestamp(
+                                article.get("providerPublishTime", 0)
+                            ).isoformat()
+
+                        # Extract thumbnail
+                        thumbnail = ""
+                        if "thumbnail" in content:
+                            resolutions = content["thumbnail"].get("resolutions", [])
+                            if resolutions:
+                                thumbnail = resolutions[0].get("url", "")
+                        elif article.get("thumbnail"):
+                            resolutions = article["thumbnail"].get("resolutions", [])
+                            if resolutions:
+                                thumbnail = resolutions[0].get("url", "")
+
+                        # Extract other fields
+                        article_type = content.get(
+                            "contentType", article.get("type", "")
+                        )
+                        uuid = content.get("id", article.get("uuid", ""))
+                        summary = content.get("summary", content.get("description", ""))
+
+                        processed_article = {
+                            "title": title,
+                            "link": link,
+                            "publisher": publisher,
+                            "published": published,
+                            "type": article_type,
+                            "thumbnail": thumbnail,
+                            "uuid": uuid,
+                            "summary": summary,
+                        }
+                        processed_news.append(processed_article)
+                    except Exception as e:
+                        logger.warning(f"Error processing article: {e}")
+                        continue
+
+            return {
+                "symbol": symbol,
+                "news_count": len(processed_news),
+                "news": processed_news,
+                "debug_info": f"Tried multiple methods, found {len(news)} raw articles, processed {len(processed_news)}",
+            }
+
+        # Run in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        news_data = await loop.run_in_executor(None, _get_news)
+
+        return news_data
+
+    except Exception as e:
+        logger.error(f"Error getting news for {symbol}: {e}")
+        raise Exception(f"Failed to get ticker news: {str(e)}")
+
+
+async def search_yahoo_finance(query: str, count: int = 10) -> Dict[str, Any]:
+    """
+    Search Yahoo Finance for stocks, ETFs, and other financial instruments.
+    Uses yf.Search as primary method and falls back to direct API call if needed.
+
+    Args:
+        query: Search query
+        count: Number of results to return
+
+    Returns:
+        Dictionary containing search results including quotes and news
+    """
+    try:
+
+        def _search():
+            # Try primary method: yf.Search
+            try:
+                search = yf.Search(query)
+                quotes = search.quotes
+                news = search.news
+
+                # Process and format the results
+                results = []
+                for quote in quotes[:count]:
+                    result_dict = {
+                        "symbol": quote.get("symbol", ""),
+                        "shortname": quote.get("shortname", ""),
+                        "longname": quote.get("longname", ""),
+                        "exchange": quote.get("exchange", ""),
+                        "asset_type": quote.get("quoteType", ""),
+                        "type_display": quote.get("typeDisp", ""),
+                        "score": quote.get("score", 0),
+                    }
+                    results.append(result_dict)
+
+                # Process news results
+                news_results = []
+                if news:
+                    for article in news[:5]:  # Limit to 5 most recent news items
+                        news_dict = {
+                            "title": article.get("title", ""),
+                            "publisher": article.get("publisher", ""),
+                            "link": article.get("link", ""),
+                        }
+                        news_results.append(news_dict)
+
+                return {
+                    "query": query,
+                    "results": results,
+                    "news": news_results,
+                }
+
+            except Exception as e:
+                logger.warning(f"Primary search method failed, trying fallback: {e}")
+
+                # Fallback method: Direct API call
+                try:
+                    search_url = f"https://query2.finance.yahoo.com/v1/finance/search"
+                    params = {
+                        "q": query,
+                        "quotesCount": count,
+                        "newsCount": 5,  # Include news in fallback too
+                        "enableFuzzyQuery": False,
+                        "quotesQueryId": "tss_match_phrase_query",
+                        "multiQuoteQueryId": "multi_quote_single_token_query",
+                        "enableCb": True,
+                        "enableNavLinks": True,
+                        "enableEnhancedTrivialQuery": True,
+                    }
+
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    }
+
+                    proxy_config = _get_proxy_config()
+                    response = requests.get(
+                        search_url, params=params, headers=headers, proxies=proxy_config
+                    )
+                    response.raise_for_status()
+
+                    data = response.json()
+
+                    search_results = []
+                    if "quotes" in data:
+                        for quote in data["quotes"]:
+                            result = {
+                                "symbol": quote.get("symbol", ""),
+                                "shortname": quote.get("shortname", ""),
+                                "longname": quote.get("longname", ""),
+                                "exchange": quote.get("exchange", ""),
+                                "asset_type": quote.get("quoteType", ""),
+                                "type_display": quote.get("typeDisp", ""),
+                                "score": quote.get("score", 0),
+                            }
+                            search_results.append(result)
+
+                    # Process news from fallback API
+                    news_results = []
+                    if "news" in data:
+                        for article in data["news"][
+                            :5
+                        ]:  # Limit to 5 most recent news items
+                            news_dict = {
+                                "title": article.get("title", ""),
+                                "publisher": article.get("publisher", ""),
+                                "link": article.get("link", ""),
+                                "published": article.get("published", ""),
+                                "summary": article.get("summary", ""),
+                            }
+                            news_results.append(news_dict)
+
+                    return {
+                        "query": query,
+                        "results": search_results,
+                        "news": news_results,
+                    }
+
+                except Exception as fallback_error:
+                    logger.warning(
+                        f"Fallback search method also failed: {fallback_error}"
+                    )
+                    return {
+                        "query": query,
+                        "results": [],
+                        "news": [],
+                        "error": f"Both search methods failed. Primary error: {str(e)}, Fallback error: {str(fallback_error)}",
+                    }
+
+        # Run in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        search_data = await loop.run_in_executor(None, _search)
+
+        return search_data
+
+    except Exception as e:
+        logger.error(f"Error searching for {query}: {e}")
+        raise Exception(f"Failed to search Yahoo Finance: {str(e)}")
+
+
+sectors = Literal[
+    "basic-materials",
+    "communication-services",
+    "consumer-cyclical",
+    "consumer-defensive",
+    "energy",
+    "financial-services",
+    "healthcare",
+    "industrials",
+    "real-estate",
+    "technology",
+    "utilities",
+]
+
+
+def get_top_etfs(sector: sectors, count: int = 10) -> str:
+    """Get top ETFs for a certain sector."""
+    if count < 1:
+        return "count must be greater than 0"
+
+    s = yf.Sector(sector)
+
+    result = [f"{symbol}: {name}" for symbol, name in s.top_etfs.items()]
+
+    return "\n".join(result[:count])
+
+
+def get_top_mutual_funds(sector: sectors, count: int = 10) -> str:
+    """Retrieve popular mutual funds for a sector, returned as a list in 'SYMBOL: Fund Name' format."""
+    if count < 1:
+        return "count must be greater than 0"
+
+    s = yf.Sector(sector)
+    return "\n".join(f"{symbol}: {name}" for symbol, name in s.top_mutual_funds.items())
+
+
+def get_top_companies(sector: sectors, count: int = 10) -> str:
+    """Get top companies in a sector with name, analyst rating, and market weight as JSON array."""
+    if count < 1:
+        return "count must be greater than 0"
+
+    s = yf.Sector(sector)
+    df = s.top_companies
+    if df is None:
+        return f"No top companies available for {sector} sector."
+
+    return df.iloc[:count].to_json(orient="records")
+
+
+def get_top_growth_companies(sector: sectors, count: int = 10) -> str:
+    """Get top growth companies grouped by industry within a sector as JSON array with growth metrics."""
+    if count < 1:
+        return "count must be greater than 0"
+
+    results = []
+
+    for industry_name in SECTOR_INDUSTY_MAPPING[sector]:
+        industry = yf.Industry(industry_name)
+
+        df = industry.top_growth_companies
+        if df is None:
+            continue
+
+        results.append(
+            {
+                "industry": industry_name,
+                "top_growth_companies": df.iloc[:count].to_json(orient="records"),
+            }
+        )
+    return json.dumps(results, ensure_ascii=False)
+
+
+def get_top_performing_companies(sector: sectors, count: int = 10) -> str:
+    """Get top performing companies grouped by industry within a sector as JSON array with performance metrics."""
+    if count < 1:
+        return "count must be greater than 0"
+
+    results = []
+
+    for industry_name in SECTOR_INDUSTY_MAPPING[sector]:
+        industry = yf.Industry(industry_name)
+
+        df = industry.top_performing_companies
+        if df is None:
+            continue
+
+        results.append(
+            {
+                "industry": industry_name,
+                "top_performing_companies": df.iloc[:count].to_json(orient="records"),
+            }
+        )
+    return json.dumps(results, ensure_ascii=False)
+
+
+async def get_top_entities(
+    entity_type: Literal[
+        "etfs", "mutual_funds", "companies", "growth_companies", "performing_companies"
+    ],
+    sector: sectors,
+    count: int = 10,
+) -> Dict[str, Any]:
+    """
+    Get top entities (ETFs, mutual funds, companies, growth companies, or performing companies) in a sector.
+
+    Args:
+        entity_type: Type of entities ('etfs', 'mutual_funds', 'companies', 'growth_companies', 'performing_companies')
+        sector: Sector name
+        count: Number of entities to return
+
+    Returns:
+        Dictionary containing top entities
+    """
+    try:
+
+        def _get_entities():
+            if count < 1:
+                return {
+                    "entity_type": entity_type,
+                    "sector": sector,
+                    "error": "count must be greater than 0",
+                    "results": [],
+                }
+
+            try:
+                match entity_type:
+                    case "etfs":
+                        result = get_top_etfs(sector, count)
+                        return {
+                            "entity_type": entity_type,
+                            "sector": sector,
+                            "results": result.split("\n") if result else [],
+                        }
+                    case "mutual_funds":
+                        result = get_top_mutual_funds(sector, count)
+                        return {
+                            "entity_type": entity_type,
+                            "sector": sector,
+                            "results": result.split("\n") if result else [],
+                        }
+                    case "companies":
+                        result = get_top_companies(sector, count)
+                        return {
+                            "entity_type": entity_type,
+                            "sector": sector,
+                            "results": (
+                                json.loads(result)
+                                if result
+                                and result
+                                != f"No top companies available for {sector} sector."
+                                else []
+                            ),
+                        }
+                    case "growth_companies":
+                        result = get_top_growth_companies(sector, count)
+                        return {
+                            "entity_type": entity_type,
+                            "sector": sector,
+                            "results": json.loads(result) if result else [],
+                        }
+                    case "performing_companies":
+                        result = get_top_performing_companies(sector, count)
+                        return {
+                            "entity_type": entity_type,
+                            "sector": sector,
+                            "results": json.loads(result) if result else [],
+                        }
+                    case _:
+                        return {
+                            "entity_type": entity_type,
+                            "sector": sector,
+                            "error": f"Unknown entity type: {entity_type}",
+                            "results": [],
+                        }
+
+            except Exception as e:
+                logger.error(
+                    f"Error getting top {entity_type} for sector {sector}: {e}"
+                )
+                return {
+                    "entity_type": entity_type,
+                    "sector": sector,
+                    "error": str(e),
+                    "results": [],
+                }
+
+        # Run in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        entities_data = await loop.run_in_executor(None, _get_entities)
+
+        return entities_data
+
+    except Exception as e:
+        logger.error(f"Error getting top entities: {e}")
+        raise Exception(f"Failed to get top entities: {str(e)}")
+
+
+async def get_price_history(
+    symbol: str, period: str = "1y", interval: str = "1d"
+) -> Dict[str, Any]:
+    """
+    Fetch historical price data for a given stock symbol over a specified period and interval.
+
+    Args:
+        symbol: Stock symbol
+        period: Period to fetch data for (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)
+        interval: Data interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo)
+
+    Returns:
+        Dictionary containing historical price data
+    """
+    try:
+
+        def _get_history():
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period=period, interval=interval)
+
+            if hist.empty:
+                return {
+                    "symbol": symbol,
+                    "period": period,
+                    "interval": interval,
+                    "data": [],
+                    "count": 0,
+                }
+
+            # Convert to list of dictionaries
+            history_data = []
+            for date, row in hist.iterrows():
+                data_point = {
+                    "date": date.isoformat(),
+                    "open": float(row["Open"]) if pd.notna(row["Open"]) else None,
+                    "high": float(row["High"]) if pd.notna(row["High"]) else None,
+                    "low": float(row["Low"]) if pd.notna(row["Low"]) else None,
+                    "close": float(row["Close"]) if pd.notna(row["Close"]) else None,
+                    "volume": int(row["Volume"]) if pd.notna(row["Volume"]) else None,
+                }
+                history_data.append(data_point)
+
+            return {
+                "symbol": symbol,
+                "period": period,
+                "interval": interval,
+                "count": len(history_data),
+                "data": history_data,
+            }
+
+        # Run in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        history_data = await loop.run_in_executor(None, _get_history)
+
+        return history_data
+
+    except Exception as e:
+        logger.error(f"Error getting price history for {symbol}: {e}")
+        raise Exception(f"Failed to get price history: {str(e)}")
+
+
+async def get_ticker_option_chain(
+    symbol: str, option_type: str = "both", date: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Get most recent or around certain date option chain data.
+
+    Args:
+        symbol: Stock symbol
+        option_type: Type of options ('call', 'put', 'both')
+        date: Specific expiration date (YYYY-MM-DD format), if None uses most recent available dates
+
+    Returns:
+        Dictionary containing option chain data
+    """
+    try:
+
+        def _get_options():
+            ticker = yf.Ticker(symbol)
+
+            # Get available expiration dates
+            try:
+                expirations = ticker.options
+                if not expirations:
+                    return {
+                        "symbol": symbol,
+                        "error": "No options available",
+                        "data": {},
+                    }
+
+                # If no date specified, use first available expiration (most recent)
+                if date is None:
+                    exp_date = expirations[0]
+                else:
+                    # Find closest date to requested date
+                    from datetime import datetime
+
+                    target_date = datetime.strptime(date, "%Y-%m-%d").date()
+                    exp_dates = [
+                        datetime.strptime(d, "%Y-%m-%d").date() for d in expirations
+                    ]
+                    closest_date = min(
+                        exp_dates, key=lambda x: abs((x - target_date).days)
+                    )
+                    exp_date = closest_date.strftime("%Y-%m-%d")
+
+                option_chain = ticker.option_chain(exp_date)
+
+                result = {
+                    "symbol": symbol,
+                    "expiration_date": exp_date,
+                    "available_expirations": expirations[
+                        :10
+                    ],  # Show first 10 available dates
+                }
+
+                if option_type in ["call", "both"]:
+                    # Process calls
+                    calls_data = []
+                    if hasattr(option_chain, "calls") and not option_chain.calls.empty:
+                        for _, row in option_chain.calls.iterrows():
+                            call_data = {
+                                "strike": (
+                                    float(row["strike"])
+                                    if pd.notna(row["strike"])
+                                    else None
+                                ),
+                                "last_price": (
+                                    float(row["lastPrice"])
+                                    if pd.notna(row["lastPrice"])
+                                    else None
+                                ),
+                                "bid": (
+                                    float(row["bid"]) if pd.notna(row["bid"]) else None
+                                ),
+                                "ask": (
+                                    float(row["ask"]) if pd.notna(row["ask"]) else None
+                                ),
+                                "volume": (
+                                    int(row["volume"])
+                                    if pd.notna(row["volume"])
+                                    else None
+                                ),
+                                "open_interest": (
+                                    int(row["openInterest"])
+                                    if pd.notna(row["openInterest"])
+                                    else None
+                                ),
+                                "implied_volatility": (
+                                    float(row["impliedVolatility"])
+                                    if pd.notna(row["impliedVolatility"])
+                                    else None
+                                ),
+                                "in_the_money": (
+                                    bool(row["inTheMoney"])
+                                    if pd.notna(row["inTheMoney"])
+                                    else None
+                                ),
+                            }
+                            calls_data.append(call_data)
+                    result["calls"] = calls_data
+
+                if option_type in ["put", "both"]:
+                    # Process puts
+                    puts_data = []
+                    if hasattr(option_chain, "puts") and not option_chain.puts.empty:
+                        for _, row in option_chain.puts.iterrows():
+                            put_data = {
+                                "strike": (
+                                    float(row["strike"])
+                                    if pd.notna(row["strike"])
+                                    else None
+                                ),
+                                "last_price": (
+                                    float(row["lastPrice"])
+                                    if pd.notna(row["lastPrice"])
+                                    else None
+                                ),
+                                "bid": (
+                                    float(row["bid"]) if pd.notna(row["bid"]) else None
+                                ),
+                                "ask": (
+                                    float(row["ask"]) if pd.notna(row["ask"]) else None
+                                ),
+                                "volume": (
+                                    int(row["volume"])
+                                    if pd.notna(row["volume"])
+                                    else None
+                                ),
+                                "open_interest": (
+                                    int(row["openInterest"])
+                                    if pd.notna(row["openInterest"])
+                                    else None
+                                ),
+                                "implied_volatility": (
+                                    float(row["impliedVolatility"])
+                                    if pd.notna(row["impliedVolatility"])
+                                    else None
+                                ),
+                                "in_the_money": (
+                                    bool(row["inTheMoney"])
+                                    if pd.notna(row["inTheMoney"])
+                                    else None
+                                ),
+                            }
+                            puts_data.append(put_data)
+                    result["puts"] = puts_data
+
+                return result
+
+            except Exception as e:
+                return {
+                    "symbol": symbol,
+                    "error": f"Could not get options data: {str(e)}",
+                    "data": {},
+                }
+
+        # Run in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        options_data = await loop.run_in_executor(None, _get_options)
+
+        return options_data
+
+    except Exception as e:
+        logger.error(f"Error getting option chain for {symbol}: {e}")
+        raise Exception(f"Failed to get option chain: {str(e)}")
+
+
+async def get_ticker_earnings(
+    symbol: str, period: str = "annual", date: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Get earnings data including annual or quarterly data and upcoming earnings dates.
+
+    Args:
+        symbol: Stock symbol
+        period: 'annual' or 'quarterly'
+        date: Specific date (YYYY-MM-DD format), if None uses most recent
+
+    Returns:
+        Dictionary containing earnings data
+    """
+    try:
+
+        def _get_earnings():
+            ticker = yf.Ticker(symbol)
+
+            result = {
+                "symbol": symbol,
+                "period": period,
+            }
+
+            try:
+                # Get earnings data
+                if period == "annual":
+                    earnings = ticker.financials
+                    earnings_dates = ticker.calendar
+                else:  # quarterly
+                    earnings = ticker.quarterly_financials
+                    earnings_dates = ticker.calendar
+
+                # Process earnings data
+                if earnings is not None and not earnings.empty:
+                    earnings_data = []
+                    for date_col in earnings.columns:
+                        earning_entry = {
+                            "date": (
+                                date_col.strftime("%Y-%m-%d")
+                                if hasattr(date_col, "strftime")
+                                else str(date_col)
+                            ),
+                            "total_revenue": (
+                                float(earnings.loc["Total Revenue", date_col])
+                                if "Total Revenue" in earnings.index
+                                and pd.notna(earnings.loc["Total Revenue", date_col])
+                                else None
+                            ),
+                            "gross_profit": (
+                                float(earnings.loc["Gross Profit", date_col])
+                                if "Gross Profit" in earnings.index
+                                and pd.notna(earnings.loc["Gross Profit", date_col])
+                                else None
+                            ),
+                            "operating_income": (
+                                float(earnings.loc["Operating Income", date_col])
+                                if "Operating Income" in earnings.index
+                                and pd.notna(earnings.loc["Operating Income", date_col])
+                                else None
+                            ),
+                            "net_income": (
+                                float(earnings.loc["Net Income", date_col])
+                                if "Net Income" in earnings.index
+                                and pd.notna(earnings.loc["Net Income", date_col])
+                                else None
+                            ),
+                            "ebitda": (
+                                float(earnings.loc["EBITDA", date_col])
+                                if "EBITDA" in earnings.index
+                                and pd.notna(earnings.loc["EBITDA", date_col])
+                                else None
+                            ),
+                        }
+                        earnings_data.append(earning_entry)
+
+                    result["earnings_data"] = earnings_data
+                else:
+                    result["earnings_data"] = []
+
+                # Get upcoming earnings dates
+                if (
+                    earnings_dates is not None
+                    and isinstance(earnings_dates, pd.DataFrame)
+                    and not earnings_dates.empty
+                ):
+                    upcoming_earnings = []
+                    for _, row in earnings_dates.iterrows():
+                        upcoming_earning = {
+                            "earnings_date": (
+                                row.get("Earnings Date", "").strftime("%Y-%m-%d")
+                                if pd.notna(row.get("Earnings Date"))
+                                else None
+                            ),
+                            "eps_estimate": (
+                                float(row.get("EPS Estimate", 0))
+                                if pd.notna(row.get("EPS Estimate"))
+                                else None
+                            ),
+                            "reported_eps": (
+                                float(row.get("Reported EPS", 0))
+                                if pd.notna(row.get("Reported EPS"))
+                                else None
+                            ),
+                            "surprise": (
+                                float(row.get("Surprise(%)", 0))
+                                if pd.notna(row.get("Surprise(%)"))
+                                else None
+                            ),
+                        }
+                        upcoming_earnings.append(upcoming_earning)
+                    result["upcoming_earnings"] = upcoming_earnings
+                else:
+                    result["upcoming_earnings"] = []
+
+                # Get additional earnings info from ticker info
+                info = ticker.info
+                result["next_earnings_date"] = info.get("earningsDate", {})
+                result["trailing_eps"] = info.get("trailingEps", 0)
+                result["forward_eps"] = info.get("forwardEps", 0)
+                result["pe_ratio"] = info.get("trailingPE", 0)
+                result["forward_pe"] = info.get("forwardPE", 0)
+
+                return result
+
+            except Exception as e:
+                logger.warning(f"Error processing earnings data: {e}")
+                result["error"] = str(e)
+                return result
+
+        # Run in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        earnings_data = await loop.run_in_executor(None, _get_earnings)
+
+        return earnings_data
+
+    except Exception as e:
+        logger.error(f"Error getting earnings for {symbol}: {e}")
+        raise Exception(f"Failed to get earnings data: {str(e)}")
