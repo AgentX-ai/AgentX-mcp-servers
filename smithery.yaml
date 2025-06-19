@@ -1,0 +1,35 @@
+# Smithery configuration file: https://smithery.ai/docs/build/project-config
+
+startCommand:
+  type: stdio
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => {
+      const env = { 
+        NOTION_API_TOKEN: config.notionApiToken,
+        NOTION_VERSION: config.notionVersion || '2022-06-28'
+      };
+      if (config.baseUrl) env.BASE_URL = config.baseUrl;
+      return { command: 'notion-mcp-server', args: [], env };
+    }
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - notionApiToken
+    properties:
+      notionApiToken:
+        type: string
+        description: Your Notion API token (starts with 'ntn_')
+      notionVersion:
+        type: string
+        default: "2022-06-28"
+        description: Notion API version (optional, defaults to 2022-06-28)
+      baseUrl:
+        type: string
+        description: Optional override for Notion API base URL
+  exampleConfig:
+    notionApiToken: "ntn_abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+    notionVersion: "2022-06-28"
+    baseUrl: https://api.notion.com
