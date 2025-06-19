@@ -35,11 +35,19 @@ uvx youtube-dlp-server
 - 📹 Video metadata extraction (title, views, likes, description)
 - 📝 Subtitle and caption extraction in multiple languages
 - 💬 Top comments retrieval with creator badges
-- 🌐 Proxy support for enterprise networks
+- 🌐 Proxy support
 
-**Perfect for:** Content analysis, research, educational tools, social media monitoring
+### 📈 [Yahoo Finance Server](./yahoo_finance_server/)
+
+**Get real-time stock, marco eco, market sentiment, financial news, etc from Yahoo Finance**
+
+### [Notion MCP Server](./notion-mcp-server/)
+
+**Connect and let your Agent, search, create, write, modify your notion content**
 
 ### 🔄 More Servers Coming Soon...
+
+---
 
 We're actively developing MCP servers for:
 
