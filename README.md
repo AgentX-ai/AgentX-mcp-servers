@@ -1,7 +1,7 @@
 # AgentX MCP Servers Collection
 
 [![Documentation](https://img.shields.io/badge/Documentation-📖-green)](https://docs.agentx.so/)
-[![Website](https://img.shields.io/badge/Website-🌐-purple)](https://mcp.agentx.so/)
+[![Website](https://img.shields.io/badge/Website-🌐-purple)](https://www.agentx.so/mcp)
 [![Discord](https://img.shields.io/badge/Discord-Join-7289DA?logo=discord&logoColor=white)](https://discord.gg/dJkAbUq9rU)
 [![YouTube Demo](https://img.shields.io/badge/Demo-YouTube-red)](https://www.youtube.com/@AgentX-2023)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)

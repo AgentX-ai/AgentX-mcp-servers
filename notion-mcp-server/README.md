@@ -2,7 +2,7 @@
 
 (Folk from https://github.com/makenotion/notion-mcp-server)
 
-![notion-mcp-sm](https://github.com/user-attachments/assets/6c07003c-8455-4636-b298-d60ffdf46cd8)
+[![Website](https://img.shields.io/badge/Website-🌐-purple)](https://www.agentx.so/mcp/notion)
 
 This project implements an [MCP server](https://spec.modelcontextprotocol.io/) for the [Notion API](https://developers.notion.com/reference/intro) with **user-friendly environment variables**.
 
@@ -170,7 +170,7 @@ Add a page titled "Notion MCP" to page "Development"
 Get the content of page 1a6b35e6e67f802fa7e1d27686f017f2
 ```
 
-### Development
+### Development (test locally)
 
 Build
 
@@ -178,14 +178,21 @@ Build
 npm run build
 ```
 
-Execute
+Install
 
 ```
-npx -y --prefix /path/to/local/notion-mcp-server @agentx-ai/notion-mcp-server
-```
-
-Publish
+npm install -g .
 
 ```
-npm publish --access public
+
+Test with modelcontextprotocol/inspector
+
+```
+npx @modelcontextprotocol/inspector notion-mcp-server
+```
+
+Click:
+
+```
+http://localhost:6274/?MCP_PROXY_AUTH_TOKEN=xxxxxxxxxx
 ```

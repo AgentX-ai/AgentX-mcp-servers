@@ -966,6 +966,19 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "heading_1": {
+                          "type": "object",
+                          "description": "A heading block. Can replace with heading_2, heading_3 (e.g. {\"type\": \"heading_1\", \"heading_1\": {\"rich_text\": [{\"type\": \"text\", \"text\": {\"content\": \"Hello, world!\"}}]}})",
+                          "properties": {
+                            "rich_text": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "description": "A text object. e.g. {\"type\": \"text\", \"text\": {\"content\": \"Hello, world!\"}}"
+                              }
+                            }
+                          }
+                        },
                         "paragraph": {
                           "type": "object",
                           "properties": {
@@ -1352,19 +1365,19 @@
                   },
                   "children": {
                     "type": "array",
-                    "description": "The content to be rendered on the new page, represented as an array of [block objects](https://developers.notion.com/reference/block).",
+                    "description": "The content to be rendered on the new page, represented as an array of block. e.g. [{\"type\": \"paragraph\", \"paragraph\": {\"rich_text\": [{\"type\": \"text\", \"text\": {\"content\": \"Hello, world!\"}}]}}, {\"type\": \"image\", \"image\": {\"type\": \"external\", \"external\": {\"url\": \"https://example.com/image.png\"}}}]",
                     "items": {
-                      "type": "string"
+                      "type": "object"
                     }
                   },
                   "icon": {
                     "type": "string",
-                    "description": "The icon of the new page. Either an [emoji object](https://developers.notion.com/reference/emoji-object) or an [external file object](https://developers.notion.com/reference/file-object)..",
+                    "description": "The icon of the new page. Either an emoji or an external media file. e.g. {\"type\": \"emoji\", \"emoji\": \"🎉\"} or {\"type\": \"external\", \"external\": {\"url\": \"https://example.com/image.png\"}}",
                     "format": "json"
                   },
                   "cover": {
                     "type": "string",
-                    "description": "The cover image of the new page, represented as a [file object](https://developers.notion.com/reference/file-object).",
+                    "description": "The cover image of the new page. e.g. {\"type\": \"external\", \"external\": {\"url\": \"https://example.com/image.png\"}}",
                     "format": "json"
                   }
                 }
