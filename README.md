@@ -116,7 +116,7 @@ npx @modelcontextprotocol/inspector uvx run youtube-dlp-server
 
 ### Creating Your Own MCP Server
 
-Each server in this collection follows our proven template:
+Each `python` server in this collection follows our proven template:
 
 ```
 your_server/
@@ -129,21 +129,6 @@ your_server/
 ├── README.md           # Server-specific docs
 └── LICENSE             # MIT License
 ```
-
-### Key Benefits of Our Architecture:
-
-- ✅ **Async/Await** - Non-blocking operations
-- ✅ **Type Safety** - Full type hints with Pydantic
-- ✅ **Error Handling** - Graceful failure modes
-- ✅ **Logging** - Structured logging for debugging
-- ✅ **Testing** - Built-in test framework
-- ✅ **Documentation** - Auto-generated from code
-
-## 🌟 Success Stories
-
-> _"AgentX MCP servers saved us months of development. We went from idea to production AI agent in just 2 days!"_ > **- Sarah Chen, CTO at DataFlow AI**
-
-> _"The YouTube DLP server helped us analyze 50,000+ videos for our research project. Flawless integration with Claude."_ > **- Dr. Michael Rodriguez, MIT AI Lab**
 
 ## 🤝 Contributing
 

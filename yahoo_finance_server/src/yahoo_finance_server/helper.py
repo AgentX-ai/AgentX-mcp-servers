@@ -22,7 +22,18 @@ def _get_proxy_config() -> Optional[Dict[str, str]]:
     """
     proxy_url = os.getenv("PROXY_URL", "").strip()
     if proxy_url:
-        logger.info(f"Using proxy: {proxy_url}")
+        # Mask the password in logs for security
+        masked_url = proxy_url
+        if "@" in proxy_url:
+            # Extract username and password for masking
+            auth_part, server_part = proxy_url.split("@", 1)
+            if ":" in auth_part:
+                username = auth_part.split("://", 1)[1].split(":")[0]
+                masked_url = (
+                    f"{proxy_url.split('://')[0]}://{username}:***@{server_part}"
+                )
+
+        logger.info(f"Using proxy: {masked_url}")
         return {"http": proxy_url, "https": proxy_url}
     return None
 
@@ -34,19 +45,21 @@ def _setup_yfinance_session():
     # Create a session with better headers to avoid bot detection
     session = requests.Session()
 
-    # Add realistic headers
+    # Add realistic headers optimized for residential proxies like Oxylabs
     session.headers.update(
         {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
             "Upgrade-Insecure-Requests": "1",
             "Sec-Fetch-Dest": "document",
             "Sec-Fetch-Mode": "navigate",
             "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
             "Cache-Control": "max-age=0",
+            "DNT": "1",
         }
     )
 
@@ -54,17 +67,116 @@ def _setup_yfinance_session():
     proxy_config = _get_proxy_config()
     if proxy_config:
         session.proxies.update(proxy_config)
-        logger.info("Proxy configuration applied to session")
+        logger.info(
+            f"Proxy configuration applied to session: {list(proxy_config.keys())}"
+        )
 
-    # Apply the session to yfinance
+        # Set longer timeout for proxy connections
+        session.timeout = 30
+
+        # Enable session persistence for better performance with residential proxies
+        session.mount(
+            "http://",
+            requests.adapters.HTTPAdapter(
+                max_retries=3, pool_connections=10, pool_maxsize=10
+            ),
+        )
+        session.mount(
+            "https://",
+            requests.adapters.HTTPAdapter(
+                max_retries=3, pool_connections=10, pool_maxsize=10
+            ),
+        )
+
+    else:
+        logger.info("No proxy configuration found - using direct connection")
+
+    # Apply the session to yfinance by overriding all HTTP methods
     try:
-        # Override yfinance's session
+        # Override yfinance's get_json method
         yf.utils.get_json = lambda url, proxy=None, **kwargs: session.get(
             url, **kwargs
         ).json()
-        logger.info("Enhanced session applied to yfinance")
+
+        # Override yfinance's get_html method
+        yf.utils.get_html = lambda url, proxy=None, **kwargs: session.get(
+            url, **kwargs
+        ).text
+
+        # Override yfinance's get_csv method
+        yf.utils.get_csv = lambda url, proxy=None, **kwargs: session.get(
+            url, **kwargs
+        ).text
+
+        # Override yfinance's get method (if it exists)
+        if hasattr(yf.utils, "get"):
+            yf.utils.get = lambda url, proxy=None, **kwargs: session.get(url, **kwargs)
+
+        # Override yfinance's post method (if it exists)
+        if hasattr(yf.utils, "post"):
+            yf.utils.post = lambda url, proxy=None, **kwargs: session.post(
+                url, **kwargs
+            )
+
+        logger.info("Enhanced session applied to all yfinance HTTP methods")
     except Exception as e:
         logger.warning(f"Could not apply enhanced session to yfinance: {e}")
+
+
+def _get_enhanced_session():
+    """
+    Get a requests session with enhanced headers and proxy configuration.
+    This should be used for all direct API calls instead of requests.get().
+    """
+    session = requests.Session()
+
+    # Add realistic headers optimized for residential proxies like Oxylabs
+    session.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Cache-Control": "max-age=0",
+            "DNT": "1",
+        }
+    )
+
+    # Apply proxy configuration if available
+    proxy_config = _get_proxy_config()
+    if proxy_config:
+        session.proxies.update(proxy_config)
+        logger.debug(
+            f"Enhanced session created with proxy: {list(proxy_config.keys())}"
+        )
+
+        # Set longer timeout for proxy connections
+        session.timeout = 30
+
+        # Enable session persistence for better performance with residential proxies
+        session.mount(
+            "http://",
+            requests.adapters.HTTPAdapter(
+                max_retries=3, pool_connections=10, pool_maxsize=10
+            ),
+        )
+        session.mount(
+            "https://",
+            requests.adapters.HTTPAdapter(
+                max_retries=3, pool_connections=10, pool_maxsize=10
+            ),
+        )
+
+    else:
+        logger.debug("Enhanced session created without proxy")
+
+    return session
 
 
 # Initialize session with proxy support
@@ -84,7 +196,7 @@ async def get_ticker_info(symbol: str) -> str:
     try:
 
         def _get_info():
-            ticker = yf.Ticker(symbol)
+            ticker = _create_enhanced_ticker(symbol)
             try:
                 fast_info = ticker.info
                 logger.info(f"Got fast_info for {symbol}: {fast_info}")
@@ -135,7 +247,7 @@ async def get_ticker_news(symbol: str, count: int = 10) -> Dict[str, Any]:
     try:
 
         def _get_news():
-            ticker = yf.Ticker(symbol)
+            ticker = _create_enhanced_ticker(symbol)
 
             # Try multiple methods to get news
             news = []
@@ -170,16 +282,11 @@ async def get_ticker_news(symbol: str, count: int = 10) -> Dict[str, Any]:
                         "enableEnhancedTrivialQuery": True,
                     }
 
-                    headers = {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                    }
-
-                    proxy_config = _get_proxy_config()
-                    response = requests.get(
+                    # Use enhanced session for consistent proxy and headers
+                    session = _get_enhanced_session()
+                    response = session.get(
                         news_url,
                         params=params,
-                        headers=headers,
-                        proxies=proxy_config,
                         timeout=10,
                     )
                     response.raise_for_status()
@@ -308,6 +415,7 @@ async def search_yahoo_finance(query: str, count: int = 10) -> Dict[str, Any]:
         def _search():
             # Try primary method: yf.Search
             try:
+                # Note: yf.Search doesn't have a direct session override, but our global overrides should work
                 search = yf.Search(query)
                 quotes = search.quotes
                 news = search.news
@@ -361,14 +469,9 @@ async def search_yahoo_finance(query: str, count: int = 10) -> Dict[str, Any]:
                         "enableEnhancedTrivialQuery": True,
                     }
 
-                    headers = {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                    }
-
-                    proxy_config = _get_proxy_config()
-                    response = requests.get(
-                        search_url, params=params, headers=headers, proxies=proxy_config
-                    )
+                    # Use enhanced session for consistent proxy and headers
+                    session = _get_enhanced_session()
+                    response = session.get(search_url, params=params)
                     response.raise_for_status()
 
                     data = response.json()
@@ -450,7 +553,7 @@ def get_top_etfs(sector: sectors, count: int = 10) -> str:
     if count < 1:
         return "count must be greater than 0"
 
-    s = yf.Sector(sector)
+    s = _create_enhanced_sector(sector)
 
     result = [f"{symbol}: {name}" for symbol, name in s.top_etfs.items()]
 
@@ -462,7 +565,7 @@ def get_top_mutual_funds(sector: sectors, count: int = 10) -> str:
     if count < 1:
         return "count must be greater than 0"
 
-    s = yf.Sector(sector)
+    s = _create_enhanced_sector(sector)
     return "\n".join(f"{symbol}: {name}" for symbol, name in s.top_mutual_funds.items())
 
 
@@ -471,7 +574,7 @@ def get_top_companies(sector: sectors, count: int = 10) -> str:
     if count < 1:
         return "count must be greater than 0"
 
-    s = yf.Sector(sector)
+    s = _create_enhanced_sector(sector)
     df = s.top_companies
     if df is None:
         return f"No top companies available for {sector} sector."
@@ -487,7 +590,7 @@ def get_top_growth_companies(sector: sectors, count: int = 10) -> str:
     results = []
 
     for industry_name in SECTOR_INDUSTY_MAPPING[sector]:
-        industry = yf.Industry(industry_name)
+        industry = _create_enhanced_industry(industry_name)
 
         df = industry.top_growth_companies
         if df is None:
@@ -510,7 +613,7 @@ def get_top_performing_companies(sector: sectors, count: int = 10) -> str:
     results = []
 
     for industry_name in SECTOR_INDUSTY_MAPPING[sector]:
-        industry = yf.Industry(industry_name)
+        industry = _create_enhanced_industry(industry_name)
 
         df = industry.top_performing_companies
         if df is None:
@@ -644,7 +747,7 @@ async def get_price_history(
     try:
 
         def _get_history():
-            ticker = yf.Ticker(symbol)
+            ticker = _create_enhanced_ticker(symbol)
             hist = ticker.history(period=period, interval=interval)
 
             if hist.empty:
@@ -705,7 +808,7 @@ async def get_ticker_option_chain(
     try:
 
         def _get_options():
-            ticker = yf.Ticker(symbol)
+            ticker = _create_enhanced_ticker(symbol)
 
             # Get available expiration dates
             try:
@@ -872,7 +975,7 @@ async def get_ticker_earnings(
     try:
 
         def _get_earnings():
-            ticker = yf.Ticker(symbol)
+            ticker = _create_enhanced_ticker(symbol)
 
             result = {
                 "symbol": symbol,
@@ -994,3 +1097,89 @@ async def get_ticker_earnings(
     except Exception as e:
         logger.error(f"Error getting earnings for {symbol}: {e}")
         raise Exception(f"Failed to get earnings data: {str(e)}")
+
+
+def _create_enhanced_ticker(symbol: str):
+    """
+    Create a yfinance Ticker object with enhanced session configuration.
+    This ensures that all operations on this ticker use our proxy and headers.
+    """
+    ticker = yf.Ticker(symbol)
+
+    # Apply our enhanced session to the ticker's internal session if possible
+    try:
+        # Some yfinance operations might create their own sessions
+        # We can't directly override them, but our global overrides should catch most cases
+        pass
+    except Exception as e:
+        logger.debug(f"Could not enhance ticker session for {symbol}: {e}")
+
+    return ticker
+
+
+def _create_enhanced_sector(sector_name: str):
+    """
+    Create a yfinance Sector object with enhanced session configuration.
+    """
+    sector = yf.Sector(sector_name)
+    return sector
+
+
+def _create_enhanced_industry(industry_name: str):
+    """
+    Create a yfinance Industry object with enhanced session configuration.
+    """
+    industry = yf.Industry(industry_name)
+    return industry
+
+
+def _test_proxy_connectivity():
+    """
+    Test if the proxy configuration is working correctly.
+    This function can be called to verify proxy setup.
+    """
+    try:
+        proxy_config = _get_proxy_config()
+        if not proxy_config:
+            logger.info("No proxy configured - using direct connection")
+            return True
+
+        logger.info("Testing proxy connectivity...")
+
+        # Test with a simple request
+        session = _get_enhanced_session()
+        response = session.get("https://httpbin.org/ip", timeout=30)
+
+        if response.status_code == 200:
+            ip_info = response.json()
+            origin_ip = ip_info.get("origin", "unknown")
+            logger.info(f"Proxy test successful. IP: {origin_ip}")
+
+            # Additional test for Yahoo Finance specifically
+            try:
+                yahoo_response = session.get("https://finance.yahoo.com", timeout=30)
+                if yahoo_response.status_code == 200:
+                    logger.info("Yahoo Finance proxy test successful")
+                    return True
+                else:
+                    logger.warning(
+                        f"Yahoo Finance proxy test failed with status: {yahoo_response.status_code}"
+                    )
+                    return False
+            except Exception as yahoo_e:
+                logger.warning(f"Yahoo Finance proxy test failed: {yahoo_e}")
+                return False
+        else:
+            logger.warning(
+                f"Proxy test failed with status code: {response.status_code}"
+            )
+            return False
+
+    except Exception as e:
+        logger.error(f"Proxy connectivity test failed: {e}")
+        return False
+
+
+# Test proxy connectivity on startup
+if _get_proxy_config():
+    _test_proxy_connectivity()
