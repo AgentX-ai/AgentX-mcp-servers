@@ -41,9 +41,13 @@ uvx youtube-dlp-server
 
 **Get real-time stock, marco eco, market sentiment, financial news, etc from Yahoo Finance**
 
-### [Notion MCP Server](./notion-mcp-server/)
+### 📓 [Notion MCP Server](./notion-mcp-server/)
 
 **Connect and let your Agent, search, create, write, modify your notion content**
+
+### [Apollo MCP Server](https://github.com/AgentX-ai/apollo-io-mcp-server)
+
+**Let your AI agent handle lead generation and enrichment**
 
 ### 🔄 More Servers Coming Soon...
 
@@ -59,46 +63,6 @@ We're actively developing MCP servers for:
 - 🛒 **E-commerce** - Shopify, WooCommerce, Stripe
 
 _Want a specific integration? [Request it here](https://github.com/AgentX-ai/AgentX-mcp-servers/issues/new)!_
-
-## 🚀 Quick Start
-
-### Option 1: Run with uvx (Recommended)
-
-```bash
-# Install any server instantly
-uvx run youtube-dlp-server
-uvx run database-connector
-uvx run web-scraper
-```
-
-### Option 2: Add to Claude Desktop
-
-Add to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "youtube-dlp": {
-      "command": "uvx",
-      "args": ["youtube-dlp-server"]
-    }
-  }
-}
-```
-
-**Config Locations:**
-
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
-
-### Option 3: Development Setup
-
-```bash
-git clone https://github.com/AgentX-ai/AgentX-mcp-servers.git
-cd AgentX-mcp-servers/youtube_dlp_server
-pip install -e .
-python -m youtube_dlp_server
-```
 
 ## 🧪 Testing Your Setup
 
