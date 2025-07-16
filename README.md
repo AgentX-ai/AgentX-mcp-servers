@@ -49,6 +49,10 @@ uvx youtube-dlp-server
 
 **Let your AI agent handle lead generation and enrichment**
 
+### [Mailchimp MCP Server](https://github.com/AgentX-ai/mailchimp-mcp)
+
+**Read only Mailchimp MCP Server. Allows your AI Agent to read your campagin data.**
+
 ### 🔄 More Servers Coming Soon...
 
 ---
