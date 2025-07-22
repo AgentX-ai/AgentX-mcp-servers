@@ -8,18 +8,6 @@
 
 🤖 **AgentX makes it effortless to connect to production-ready MCP servers, empowering builders to create powerful AI agents with minimal setup.** Get your AI agents talking to the world's services in minutes, not months.
 
-## 🎯 What is MCP?
-
-[Model Context Protocol (MCP)](https://modelcontextprotocol.io) is an open standard that enables AI models to securely access external tools, data sources, and services. Think of it as a universal API that lets your AI agents interact with databases, web services, file systems, and more.
-
-## ⚡ Why AgentX MCP Servers?
-
-- 🚀 **Production-Ready** - Battle-tested servers used by thousands of developers
-- 🔧 **Plug & Play** - Install with one command, zero configuration required
-- 🌍 **Universal Compatibility** - Works with Claude, GPT, and any MCP-compatible AI
-- 🛡️ **Enterprise Grade** - Built with security, reliability, and performance in mind
-- 📦 **Growing Ecosystem** - New integrations added regularly based on community needs
-
 ## 🗂️ Available MCP Servers
 
 ### 🎬 [YouTube DLP Server](./youtube_dlp_server/)
@@ -57,14 +45,19 @@ uvx youtube-dlp-server
 
 ---
 
-We're actively developing MCP servers for:
+## 🎯 What is MCP?
 
-- 📊 **Database Connectors** - PostgreSQL, MySQL, MongoDB
-- 🌐 **Web Scraping** - Beautiful Soup, Playwright, Selenium
-- 📧 **Communication** - Email, Slack, Discord, Teams
-- 🗄️ **Cloud Storage** - AWS S3, Google Drive, Dropbox
-- 🔍 **Search & Analytics** - Elasticsearch, Google Analytics
-- 🛒 **E-commerce** - Shopify, WooCommerce, Stripe
+[Model Context Protocol (MCP)](https://modelcontextprotocol.io) is an open standard that enables AI models to securely access external tools, data sources, and services. Think of it as a universal API that lets your AI agents interact with databases, web services, file systems, and more.
+
+## ⚡ Why AgentX MCP Servers?
+
+- 🚀 **Production-Ready** - Battle-tested servers used by thousands of developers
+- 🔧 **Plug & Play** - Install with one command, zero configuration required
+- 🌍 **Universal Compatibility** - Works with Claude, GPT, and any MCP-compatible AI
+- 🛡️ **Enterprise Grade** - Built with security, reliability, and performance in mind
+- 📦 **Growing Ecosystem** - New integrations added regularly based on community needs
+
+We're actively developing MCP servers.
 
 _Want a specific integration? [Request it here](https://github.com/AgentX-ai/AgentX-mcp-servers/issues/new)!_
 
