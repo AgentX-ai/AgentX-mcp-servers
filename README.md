@@ -10,26 +10,15 @@
 
 ## 🗂️ Available MCP Servers
 
-### 🎬 [YouTube DLP Server](./youtube_dlp_server/)
+### [YouTube DLP Server](https://github.com/AgentX-ai/youtube-dlp-server)
 
 **Extract video information, subtitles, and comments from YouTube**
 
-```bash
-uvx youtube-dlp-server
-```
-
-**Features:**
-
-- 📹 Video metadata extraction (title, views, likes, description)
-- 📝 Subtitle and caption extraction in multiple languages
-- 💬 Top comments retrieval with creator badges
-- 🌐 Proxy support
-
-### 📈 [Yahoo Finance Server](./yahoo_finance_server/)
+### 📈 [Yahoo Finance Server](https://github.com/AgentX-ai/yahoo-finance-server)
 
 **Get real-time stock, marco eco, market sentiment, financial news, etc from Yahoo Finance**
 
-### 📓 [Notion MCP Server](./notion-mcp-server/)
+### 📓 [Notion MCP Server](https://github.com/AgentX-ai/notion-mcp-server)
 
 **Connect and let your Agent, search, create, write, modify your notion content**
 
